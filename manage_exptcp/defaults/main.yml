@@ -1,0 +1,14 @@
+#SPDX-License-Identifier: MIT-0
+---
+# defaults file for manage_exptcp
+inventory_git_user_name: "{{ lookup('env', 'GIT_USER') }}"
+inventory_git_user_email: "{{ lookup('env', 'GIT_USER_MAIL') }}"
+inventory_git_token: "{{ lookup('env', 'GIT_TOKEN') }}"
+inventory_git_repo_url: "https://{{ inventory_git_user_name }}:{{ inventory_git_token }}@github.com/{{ inventory_git_user_name }}/inventory-repo.git"
+inventory_git_branch: "main"
+inventory_dir: "/tmp/inventory-repo"
+subnets:
+  - 192.168.1.0/24  # First subnet (priority)
+  - 192.168.2.0/24  # Second subnet (fallback)
+nodeport_range_start: 30000
+nodeport_range_end: 32767

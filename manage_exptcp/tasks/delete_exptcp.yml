@@ -1,0 +1,42 @@
+# tasks/delete_exptcp.yml
+---
+- name: Validate input for deleting exptcp object
+  fail:
+    msg: "souscription and name are required for deletion"
+  when: exptcp_object.souscription == "" or  exptcp_object.name == ""
+
+- name: Retrieve exptcp object by name
+  set_fact:
+    exptcp_to_delete: "{{ exptcp_inventory.subscriptions[exptcp_object.souscription] | selectattr('name', 'equalto', exptcp_object.name) | first | default('unknown') }}"
+  when: exptcp_inventory.subscriptions[exptcp_object.souscription] is defined
+
+- name: Fail if exptcp object not found
+  fail:
+    msg: "exptcp object with name={{ exptcp_object.name }} not found in subscription={{ exptcp_object.souscription }}"
+  when: exptcp_to_delete == "unknown"
+
+- name: Remove exptcp object from subscription list
+  set_fact:
+    exptcp_inventory: "{{ exptcp_inventory | combine({ 'subscriptions': exptcp_inventory.subscriptions | combine({ exptcp_object.souscription: exptcp_inventory.subscriptions[exptcp_object.souscription] | rejectattr('name', 'equalto', exptcp_object.name) | list }) }) }}"
+
+- name: Remove assigned IP from the list
+  set_fact:
+    exptcp_inventory: "{{ exptcp_inventory | combine({ 'assigned_ips': exptcp_inventory.assigned_ips | reject('equalto', exptcp_to_delete.lb.ip) | list }) }}"
+
+- name: Remove assigned NodePort from the list
+  set_fact:
+    exptcp_inventory: "{{ exptcp_inventory | combine({ 'assigned_nodeports': exptcp_inventory.assigned_nodeports | reject('equalto', exptcp_to_delete.service.nodeport) | list }) }}"
+
+- name: Save updated exptcp inventory to cluster file
+  copy:
+    dest: "{{ inventory_dir }}/{{ cluster_name }}/exptcp_inventory.yml"
+    content: "{{ exptcp_inventory | to_yaml }}"
+
+- name: Commit changes to Git (Delete)
+  shell: |
+    cd {{ inventory_dir }}
+    git config user.name "{{ inventory_git_user_name }}"
+    git config user.email "{{ inventory_git_user_email }}"
+    git add {{ cluster_name }}/exptcp_inventory.yml
+    git commit -m "Deleted exptcp object: name={{ exptcp_object.name }} for subscription={{ exptcp_object.souscription }} in cluster={{ cluster_name }}"
+    git push origin {{ inventory_git_branch }}

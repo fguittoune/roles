@@ -1,0 +1,36 @@
+# tasks/common.yml
+---
+- name: Ensure inventory directory exists
+  file:
+    path: "{{ inventory_dir }}"
+    state: directory
+
+- name: Clone inventory Git repository (always fresh)
+  git:
+    repo: "{{ inventory_git_repo_url }}"
+    dest: "{{ inventory_dir }}"
+    version: "{{ inventory_git_branch }}"
+    force: yes  # Force overwrite existing repository
+
+- name: Ensure cluster directory exists
+  file:
+    path: "{{ inventory_dir }}/{{ cluster_name }}"
+    state: directory
+
+- name: Check if exptcp_objects_file exists
+  stat:
+    path: "{{ inventory_dir }}/{{ cluster_name }}/exptcp_inventory.yml"
+  register: exptcp_file_stat
+
+- name: Create exptcp_objects_file if it doesn't exist
+  copy:
+    dest: "{{ inventory_dir }}/{{ cluster_name }}/exptcp_inventory.yml"
+    content: |
+      subscriptions: {}
+      assigned_ips: []
+      assigned_nodeports: []
+  when: not exptcp_file_stat.stat.exists
+
+- name: Load exptcp inventory for the cluster
+  set_fact:
+    exptcp_inventory: "{{ lookup('file', inventory_dir + '/' + cluster_name + '/exptcp_inventory.yml') | from_yaml }}"

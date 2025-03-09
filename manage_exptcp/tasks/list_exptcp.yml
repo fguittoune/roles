@@ -1,0 +1,5 @@
+# tasks/list_exptcp.yml
+---
+- name: Display exptcp inventory for the cluster
+  debug:
+    msg: "{{ exptcp_inventory }}"

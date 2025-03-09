@@ -1,0 +1,33 @@
+# tasks/get_exptcp.yml
+---
+- name: Debug
+  debug:
+    msg: "{{ exptcp_inventory.subscriptions[exptcp_object.souscription] }}"
+
+- name: Validate input for getting exptcp object
+  fail:
+    msg: "souscription and name are required to retrieve the exptcp object"
+  when: exptcp_object.souscription == "" or exptcp_object.name == ""
+
+- name: Check if subscription exists
+  fail:
+    msg: "Subscription {{ exptcp_object.souscription }} does not exist"
+  when: exptcp_inventory.subscriptions[exptcp_object.souscription] is not defined
+
+- name: Check if subscription list is empty
+  fail:
+    msg: "No exptcp objects found in subscription {{ exptcp_object.souscription }}"
+  when: exptcp_inventory.subscriptions[exptcp_object.souscription] | length == 0
+
+- name: Retrieve exptcp object by name
+  set_fact:
+    retrieved_exptcp: "{{ exptcp_inventory.subscriptions[exptcp_object.souscription] | selectattr('name', 'equalto', exptcp_object.name) | first | default('unknown') }}"
+
+- name: Fail if exptcp object not found
+  fail:
+    msg: "exptcp object with name={{ exptcp_object.name }} not found in subscription={{ exptcp_object.souscription }}"
+  when: retrieved_exptcp == "unknown"
+
+- name: Display retrieved exptcp object
+  debug:
+    msg: "{{ retrieved_exptcp }}"

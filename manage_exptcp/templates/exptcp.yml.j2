@@ -1,0 +1,10 @@
+# templates/exptcp_object.yml.j2
+name: "exptcp-{{ exptcp_object.lb.ip | replace('.', '-') }}-{{ exptcp_object.lb.port }}"
+souscription: "{{ exptcp_object.souscription }}"
+lb:
+  ip: "{{ exptcp_object.lb.ip }}"
+  port: {{ exptcp_object.lb.port }}
+service:
+  nodeport: {{ exptcp_object.service.nodeport }}
+  targetport: {{ exptcp_object.service.targetport }}
+  podselector: "{{ exptcp_object.service.podselector }}"

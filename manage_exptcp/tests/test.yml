@@ -1,0 +1,17 @@
+---
+- hosts: localhost
+  vars:
+    action: "{{ action | default('get') }}"  # Can be "add", "delete", "get", or "list"
+    cluster_name: "{{ cluster_name | default('cluster1') }}"  # Name of the cluster
+    exptcp_object:
+      souscription: "{{ souscription | default('subscription1') }}"
+      name: "{{ name | default('')}}"  # Name of the subscription
+      lb:
+        ip: "{{ lb_ip | default('') }}"  # Leave empty to auto-assign an IP
+        port: "{{ lb_port | default(80) }}"  # VIP port
+      service:
+        nodeport: "{{ nodeport | default('') }}"  # NodePort
+        targetport: "{{ nodeport | default(8080) }}"  # Target port
+        podselector: "{{ podselector | default('app=myapp') }}"  # Pod selector
+  roles:
+    - manage_exptcp

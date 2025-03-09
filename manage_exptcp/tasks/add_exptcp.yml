@@ -1,0 +1,117 @@
+# tasks/add_exptcp.yml
+---
+- name: Validate input for adding exptcp object
+  fail:
+    msg: "souscription, lb.port, service.targetport, and service.podselector are required"
+  when: >
+    exptcp_object.souscription == "" or
+    exptcp_object.lb.port == "" or
+    exptcp_object.service.targetport == "" or
+    exptcp_object.service.podselector == ""
+
+- name: Assign IP from subnets using custom Python module
+  assign_ip:
+    subnets: "{{ subnets }}"
+    assigned_ips: "{{ exptcp_inventory.assigned_ips }}"
+  register: ip_result
+  when: exptcp_object.lb.ip == ""
+
+- name: Set assigned IP
+  set_fact:
+    assigned_ip: "{{ ip_result.ip }}"
+  when: exptcp_object.lb.ip == ""
+
+- name: Use provided IP if specified
+  set_fact:
+    assigned_ip: "{{ exptcp_object.lb.ip }}"
+  when: exptcp_object.lb.ip != ""
+
+- name: Check if IP is already assigned
+  fail:
+    msg: "IP {{ assigned_ip }} is already assigned"
+  when: assigned_ip and assigned_ip in exptcp_inventory.assigned_ips
+
+- name: Assign NodePort from range
+  find_available_nodeport:
+    assigned_ports: "{{ exptcp_inventory.assigned_nodeports | default([]) }}"
+    start_port: "{{ nodeport_range_start | default(30000) }}"
+    end_port: "{{ nodeport_range_end | default(32767) }}"
+  when: exptcp_object.service.nodeport == ""
+  register: nodeport_result
+
+- name: Set the assigned NodePort
+  set_fact:
+    assigned_nodeport: "{{ nodeport_result.available_port }}"
+  when: nodeport_result is defined and nodeport_result.available_port is defined
+
+- name: Use provided NodePort if specified
+  set_fact:
+    assigned_nodeport: "{{ exptcp_object.service.nodeport }}"
+  when: exptcp_object.service.nodeport != ""
+
+- name: Check if NodePort is already assigned
+  fail:
+    msg: "NodePort {{ assigned_nodeport }} is already assigned"
+  when: assigned_nodeport in exptcp_inventory.assigned_nodeports
+
+- name: Create exptcp object with VIP-based name (IP + VIP Port)
+  set_fact:
+    exptcp_object: >
+      {{
+        exptcp_object | combine({
+          'name': 'exptcp-' + assigned_ip | replace('.', '-') + '-' + exptcp_object.lb.port | string,
+          'souscription': exptcp_object.souscription,
+          'lb': {
+            'ip': assigned_ip,
+            'port': exptcp_object.lb.port
+          },
+          'service': {
+            'nodeport': assigned_nodeport | int,
+            'targetport': exptcp_object.service.targetport,
+            'podselector': exptcp_object.service.podselector
+          }
+        })
+      }}
+
+- name: Initialize subscription list if it doesn't exist
+  set_fact:
+    exptcp_inventory: >
+      {{
+        exptcp_inventory | combine({
+          'subscriptions': exptcp_inventory.subscriptions | combine({ exptcp_object.souscription: exptcp_inventory.subscriptions[exptcp_object.souscription] | default([]) })
+        })
+      }}
+  when: exptcp_object.souscription not in exptcp_inventory.subscriptions
+
+- name: Add exptcp object to subscription list
+  set_fact:
+    exptcp_inventory: >
+      {{
+        exptcp_inventory | combine({
+          'subscriptions': exptcp_inventory.subscriptions | combine({
+            exptcp_object.souscription: exptcp_inventory.subscriptions[exptcp_object.souscription] + [exptcp_object]
+          })
+        })
+      }}
+
+- name: Add assigned IP to the list
+  set_fact:
+    exptcp_inventory: "{{ exptcp_inventory | combine({ 'assigned_ips': exptcp_inventory.assigned_ips + [assigned_ip] }) }}"
+
+- name: Add assigned NodePort to the list
+  set_fact:
+    exptcp_inventory: "{{ exptcp_inventory | combine({ 'assigned_nodeports': exptcp_inventory.assigned_nodeports + [assigned_nodeport] }) }}"
+
+- name: Save updated exptcp inventory to cluster file
+  copy:
+    dest: "{{ inventory_dir }}/{{ cluster_name }}/exptcp_inventory.yml"
+    content: "{{ exptcp_inventory | to_yaml }}"
+
+- name: Commit changes to Git (Add)
+  shell: |
+    cd {{ inventory_dir }}
+    git config user.name "{{ inventory_git_user_name }}"
+    git config user.email "{{ inventory_git_user_email }}"
+    git add {{ cluster_name }}/exptcp_inventory.yml
+    git commit -m "Added exptcp object: name={{ exptcp_object.name }} for subscription={{ exptcp_object.souscription }} in cluster={{ cluster_name }}"
+    git push origin {{ inventory_git_branch }}
